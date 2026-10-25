@@ -4,7 +4,7 @@ import { HomeAssistant } from "custom-card-helpers";
 import { CardConfig, CardMode, FilterState, LibraryItem } from "./types";
 import { fetchLibrary, fetchStreamUrl, stopActivity } from "./api";
 import { applyFilters } from "./filters";
-import { groupByDay, DayGroup } from "./grouping";
+import { groupByDay, DayGroup, timeSettingsFromHass } from "./grouping";
 import { cameraTile } from "./live-grid";
 import { PlayerSource } from "./player-dialog";
 import { CARD_VERSION } from "./version";
@@ -15,8 +15,6 @@ import "./filter-bar";
 import "./recordings-grid";
 import "./player-dialog";
 import "./editor";
-
-const TZ = "Pacific/Auckland";
 
 const EMPTY_FILTER: FilterState = {
   cameras: null,
@@ -138,7 +136,8 @@ export class ArloCameraCard extends LitElement {
 
   private get _groups(): DayGroup[] {
     const filtered = applyFilters(this._library, this._filter);
-    return groupByDay(filtered, TZ, Date.now());
+    const t = timeSettingsFromHass(this.hass as any);
+    return groupByDay(filtered, t.timeZone, Date.now(), t.locale);
   }
 
   private async _openLive(entityId: string) {
@@ -231,6 +230,7 @@ export class ArloCameraCard extends LitElement {
                 .columns=${this._config.columns}
                 .loading=${this._loading}
                 .error=${this._error}
+                .time=${timeSettingsFromHass(this.hass as any)}
                 @play-clip=${(e: CustomEvent) => this._openClip(e.detail.item)}
                 @retry=${() => this._loadLibrary()}
               ></arlo-recordings-grid>
