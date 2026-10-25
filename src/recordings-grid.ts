@@ -1,17 +1,16 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
-import { DayGroup, toMs } from "./grouping";
+import { DayGroup, TimeSettings, toMs } from "./grouping";
 import { LibraryItem } from "./types";
 import { mapTrigger } from "./filters";
 import { gridTemplate } from "./layout";
 
-const TZ = "Pacific/Auckland";
-
-function timeLabel(item: LibraryItem): string {
-  return new Intl.DateTimeFormat("en-NZ", {
-    timeZone: TZ,
+function timeLabel(item: LibraryItem, t: TimeSettings): string {
+  return new Intl.DateTimeFormat(t.locale, {
+    timeZone: t.timeZone,
     hour: "numeric",
     minute: "2-digit",
+    hour12: t.hour12,
   }).format(new Date(toMs(item.created_at)));
 }
 
@@ -31,6 +30,8 @@ export class ArloRecordingsGrid extends LitElement {
   @property({ type: Number }) columns = 0;
   @property({ type: Boolean }) loading = false;
   @property() error = "";
+  /** time zone / locale / 12-24h, derived from the HA user profile */
+  @property({ attribute: false }) time: TimeSettings = {};
 
   static styles = css`
     .grid {
@@ -134,7 +135,7 @@ export class ArloRecordingsGrid extends LitElement {
                   <img src=${item.thumbnail} alt=${trig} />
                   <span class="who ${trig}">${trig}</span>
                   <span class="meta"
-                    >${timeLabel(item)}${dur ? ` · ${dur}` : ""}</span
+                    >${timeLabel(item, this.time)}${dur ? ` · ${dur}` : ""}</span
                   >
                 </div>
               `;
