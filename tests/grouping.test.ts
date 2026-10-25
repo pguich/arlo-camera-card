@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toMs, groupByDay } from "../src/grouping";
+import { toMs, groupByDay, timeSettingsFromHass } from "../src/grouping";
 import { LibraryItem } from "../src/types";
 
 const TZ = "Pacific/Auckland";
@@ -34,7 +34,8 @@ describe("groupByDay", () => {
         item("camera.a", todayNoon),
       ],
       TZ,
-      NOW
+      NOW,
+      "en-NZ"
     );
 
     expect(groups.map((g) => g.label)).toEqual([
@@ -51,5 +52,49 @@ describe("groupByDay", () => {
 
   it("returns [] for no items", () => {
     expect(groupByDay([], TZ, NOW)).toEqual([]);
+  });
+});
+
+describe("timeSettingsFromHass", () => {
+  const hass = (locale: object) => ({
+    config: { time_zone: "Europe/Zurich" },
+    locale: { language: "en-GB", ...locale },
+  });
+
+  it("uses HA's configured zone for 'server' and when unset", () => {
+    expect(timeSettingsFromHass(hass({ time_zone: "server" })).timeZone).toBe(
+      "Europe/Zurich"
+    );
+    expect(timeSettingsFromHass(hass({})).timeZone).toBe("Europe/Zurich");
+  });
+
+  it("uses the browser zone for 'local'", () => {
+    expect(
+      timeSettingsFromHass(hass({ time_zone: "local" })).timeZone
+    ).toBeUndefined();
+  });
+
+  it("maps the profile time format to hour12", () => {
+    expect(timeSettingsFromHass(hass({ time_format: "24" })).hour12).toBe(false);
+    expect(timeSettingsFromHass(hass({ time_format: "12" })).hour12).toBe(true);
+    expect(
+      timeSettingsFromHass(hass({ time_format: "language" })).hour12
+    ).toBeUndefined();
+  });
+
+  it("uses the profile language as locale", () => {
+    expect(timeSettingsFromHass(hass({})).locale).toBe("en-GB");
+  });
+
+  it("formats a Zurich 17:01 recording as 17:01, not NZ time", () => {
+    // 2026-10-25 17:01 Europe/Zurich (UTC+1) = 16:01Z
+    const t = timeSettingsFromHass(hass({ time_format: "24" }));
+    const label = new Intl.DateTimeFormat(t.locale, {
+      timeZone: t.timeZone,
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: t.hour12,
+    }).format(new Date(Date.UTC(2026, 9, 25, 16, 1)));
+    expect(label).toBe("17:01");
   });
 });
