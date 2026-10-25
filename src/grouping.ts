@@ -10,8 +10,54 @@ export function toMs(createdAt: number): number {
   return createdAt > 1e12 ? createdAt : createdAt * 1000;
 }
 
-/** y-m-d string for an instant in a given IANA timezone. */
-function dayKey(ms: number, tz: string): string {
+/**
+ * How times should be displayed. `timeZone` / `locale` left undefined mean
+ * "use the browser's own setting".
+ */
+export interface TimeSettings {
+  timeZone?: string;
+  locale?: string;
+  hour12?: boolean;
+}
+
+/** The subset of `hass` we read; kept loose because older HA versions lack fields. */
+interface HassTimeSource {
+  config?: { time_zone?: string };
+  locale?: { language?: string; time_format?: string; time_zone?: string };
+}
+
+/**
+ * Derive display settings from the user's Home Assistant profile:
+ * - time zone: profile "Use server time zone" -> HA's configured zone,
+ *   "Use your local time zone" -> browser zone; HA's zone if no profile setting.
+ * - locale: the profile language.
+ * - 12/24h: the profile "Time format" (12 / 24 / language / system).
+ */
+export function timeSettingsFromHass(hass?: HassTimeSource): TimeSettings {
+  const loc = hass?.locale;
+  const serverTz = hass?.config?.time_zone || undefined;
+  const timeZone = loc?.time_zone === "local" ? undefined : serverTz;
+
+  let locale = loc?.language || undefined;
+  let hour12: boolean | undefined;
+  switch (loc?.time_format) {
+    case "12":
+      hour12 = true;
+      break;
+    case "24":
+      hour12 = false;
+      break;
+    case "system":
+      locale = undefined; // let the browser/OS decide
+      break;
+    default:
+      break; // "language" or unset: the locale decides
+  }
+  return { timeZone, locale, hour12 };
+}
+
+/** y-m-d string for an instant in a given IANA timezone (undefined = browser). */
+function dayKey(ms: number, tz?: string): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
     year: "numeric",
@@ -24,8 +70,8 @@ function dayKey(ms: number, tz: string): string {
   return `${y}-${m}-${d}`;
 }
 
-function prettyLabel(ms: number, tz: string): string {
-  return new Intl.DateTimeFormat("en-NZ", {
+function prettyLabel(ms: number, tz?: string, locale?: string): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: tz,
     weekday: "short",
     day: "numeric",
@@ -35,8 +81,9 @@ function prettyLabel(ms: number, tz: string): string {
 
 export function groupByDay(
   items: LibraryItem[],
-  tz: string,
-  now: number
+  tz: string | undefined,
+  now: number,
+  locale?: string
 ): DayGroup[] {
   if (items.length === 0) return [];
 
@@ -64,7 +111,7 @@ export function groupByDay(
     let label: string;
     if (key === todayKey) label = "Today";
     else if (key === yesterdayKey) label = "Yesterday";
-    else label = prettyLabel(toMs(items[0].created_at), tz);
+    else label = prettyLabel(toMs(items[0].created_at), tz, locale);
     return { label, items };
   });
 }
